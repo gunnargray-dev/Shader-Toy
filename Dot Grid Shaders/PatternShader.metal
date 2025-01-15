@@ -115,29 +115,26 @@ float touchRipple(float2 uv, float2 touchPos, float touchTime, float touchEndTim
     float2 delta = uv - touchPos;
     float dist = length(delta);
     
-    // Create expanding ripple wave
-    float rippleSpeed = 2.0;
-    float wavelength = 0.15;
+    // Constants for ripple animation
+    float duration = 1.5;           // Faster animation (was 3.0)
+    float maxRadius = 0.8;          // Smaller radius (was 1.5)
+    float waveCount = 2.0;          // Keep two waves
     
-    // Handle post-touch animation
-    float fadeOutDuration = 2.0;  // How long the ripple continues after touch
-    float postTouchTime = touchEndTime >= 0 ? touchTime - touchEndTime : 0.0;
-    float fadeOutFactor = touchEndTime >= 0 ? smoothstep(fadeOutDuration, 0.0, postTouchTime) : 1.0;
+    // Calculate ripple phase
+    float progress = touchTime / duration;
+    float currentRadius = progress * maxRadius;
+    float phase = (dist - currentRadius) * 6.28318 * waveCount;
     
-    // Increase ripple radius after touch ends
-    float radiusMultiplier = touchEndTime >= 0 ? (1.0 + postTouchTime * 0.5) : 1.0;
-    dist = dist / radiusMultiplier;
+    // Create more pronounced wave
+    float wave = sin(phase) * 0.5 + 0.5;
+    wave = pow(wave, 0.7); // Keep wave sharpness
     
-    // Ripple phase moves outward from touch point
-    float phase = (dist - touchTime * rippleSpeed) / wavelength;
-    float ripple = sin(phase * 3.14159 * 2.0);
+    // Fade based on time and distance
+    float timeFade = smoothstep(1.0, 0.0, progress);
+    float distanceFade = smoothstep(currentRadius + 0.05, currentRadius - 0.05, dist);
     
-    // Fade based on distance and time
-    float distanceFade = smoothstep(1.0, 0.0, dist);
-    float timeFade = exp(-touchTime * 1.0);  // Slower fade for longer effect
-    
-    // Combine for final ripple effect with post-touch fade
-    return ripple * distanceFade * timeFade * fadeOutFactor;
+    // Keep increased intensity
+    return wave * timeFade * distanceFade * 1.5;
 }
 
 // Modify existing pattern functions to include touch ripple

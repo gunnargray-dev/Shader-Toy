@@ -62,6 +62,7 @@ struct ShaderPatternView: UIViewRepresentable {
         var touchPosition: CGPoint?
         var touchStartTime: Float = 0
         var touchEndTime: Float = -1
+        var lastTouchPosition: CGPoint? // Track last touch to detect new touches
 
         init(_ parent: ShaderPatternView) {
             self.parent = parent
@@ -100,14 +101,18 @@ struct ShaderPatternView: UIViewRepresentable {
 
         func handleTouch(_ position: CGPoint?) {
             if let position = position {
-                touchPosition = position
-                if touchPosition == nil { // Touch just started
+                // If this is a new touch or touch at a different position
+                if touchPosition == nil || (lastTouchPosition != position) {
                     touchStartTime = currentTime
                     touchEndTime = -1
+                    print("New touch detected at: \(position)")
                 }
-            } else { // Touch ended
+                touchPosition = position
+                lastTouchPosition = position
+            } else {
                 touchEndTime = currentTime
-                // Keep the last touch position for the fade-out animation
+                // Don't clear touchPosition yet, let it fade out
+                lastTouchPosition = nil
             }
         }
 
@@ -146,12 +151,16 @@ struct ShaderPatternView: UIViewRepresentable {
                 )
                 config.touchTime = currentTime - touchStartTime
                 config.touchEndTime = touchEndTime
-            }
 
-            // Clear touch state after fade-out is complete
-            if touchEndTime >= 0 && (currentTime - touchEndTime) > 2.0 {
-                touchPosition = nil
-                touchEndTime = -1
+                // Clear touch state after animation duration (1.5 seconds)
+                if touchEndTime >= 0 && (currentTime - touchStartTime) > 1.5 {
+                    touchPosition = nil
+                    touchEndTime = -1
+                }
+            } else {
+                config.touchPosition = SIMD2<Float>(-1, -1)
+                config.touchTime = 0
+                config.touchEndTime = -1
             }
 
             encoder.setRenderPipelineState(pipelineState)
