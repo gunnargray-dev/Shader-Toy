@@ -61,6 +61,7 @@ struct ShaderPatternView: UIViewRepresentable {
         var patternType: Int32 = 0
         var touchPosition: CGPoint?
         var touchStartTime: Float = 0
+        var touchEndTime: Float = -1
 
         init(_ parent: ShaderPatternView) {
             self.parent = parent
@@ -98,9 +99,15 @@ struct ShaderPatternView: UIViewRepresentable {
         }
 
         func handleTouch(_ position: CGPoint?) {
-            touchPosition = position
-            if position != nil {
-                touchStartTime = currentTime
+            if let position = position {
+                touchPosition = position
+                if touchPosition == nil { // Touch just started
+                    touchStartTime = currentTime
+                    touchEndTime = -1
+                }
+            } else { // Touch ended
+                touchEndTime = currentTime
+                // Keep the last touch position for the fade-out animation
             }
         }
 
@@ -133,15 +140,18 @@ struct ShaderPatternView: UIViewRepresentable {
             )
 
             if let touch = touchPosition {
-                // Convert touch position to UV coordinates
                 config.touchPosition = SIMD2<Float>(
                     Float(touch.x / view.bounds.width),
                     Float(1.0 - touch.y / view.bounds.height)
                 )
                 config.touchTime = currentTime - touchStartTime
-            } else {
-                config.touchPosition = SIMD2<Float>(-1, -1)
-                config.touchTime = 0
+                config.touchEndTime = touchEndTime
+            }
+
+            // Clear touch state after fade-out is complete
+            if touchEndTime >= 0 && (currentTime - touchEndTime) > 2.0 {
+                touchPosition = nil
+                touchEndTime = -1
             }
 
             encoder.setRenderPipelineState(pipelineState)

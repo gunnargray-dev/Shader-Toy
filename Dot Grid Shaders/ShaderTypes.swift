@@ -13,6 +13,7 @@ struct ShaderConfig {
     var patternType: Int32 = 0
     var touchPosition = SIMD2<Float>(-1, -1)
     var touchTime: Float = 0
+    var touchEndTime: Float = -1 // Time when touch ended (-1 means no end)
     var padding: Float = 0
 }
 

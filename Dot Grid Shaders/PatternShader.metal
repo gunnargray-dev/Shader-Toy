@@ -109,26 +109,39 @@ float smoothNoise(float2 st) {
               mix(c, d, u.x), u.y);
 }
 
-float touchRipple(float2 uv, float2 touchPos, float touchTime, float speed) {
+float touchRipple(float2 uv, float2 touchPos, float touchTime, float touchEndTime, float speed) {
     if (touchPos.x < 0 || touchPos.y < 0) return 0.0;
     
     float2 delta = uv - touchPos;
     float dist = length(delta);
     
-    // Create expanding ripple with stronger effect
-    float rippleSpeed = 4.0;  // Faster expansion
-    float ripplePhase = dist * 20.0 - touchTime * rippleSpeed;  // More visible waves
+    // Create expanding ripple wave
+    float rippleSpeed = 2.0;
+    float wavelength = 0.15;
     
-    // Adjust fade out to last longer
-    float timeFade = exp(-touchTime * 0.5);  // Even slower time fade
-    float distFade = smoothstep(1.0, 0.0, dist);  // Smoother distance fade
+    // Handle post-touch animation
+    float fadeOutDuration = 2.0;  // How long the ripple continues after touch
+    float postTouchTime = touchEndTime >= 0 ? touchTime - touchEndTime : 0.0;
+    float fadeOutFactor = touchEndTime >= 0 ? smoothstep(fadeOutDuration, 0.0, postTouchTime) : 1.0;
     
-    float ripple = sin(ripplePhase) * 0.5 + 0.5;
-    return ripple * timeFade * distFade * 2.0; // Doubled effect strength
+    // Increase ripple radius after touch ends
+    float radiusMultiplier = touchEndTime >= 0 ? (1.0 + postTouchTime * 0.5) : 1.0;
+    dist = dist / radiusMultiplier;
+    
+    // Ripple phase moves outward from touch point
+    float phase = (dist - touchTime * rippleSpeed) / wavelength;
+    float ripple = sin(phase * 3.14159 * 2.0);
+    
+    // Fade based on distance and time
+    float distanceFade = smoothstep(1.0, 0.0, dist);
+    float timeFade = exp(-touchTime * 1.0);  // Slower fade for longer effect
+    
+    // Combine for final ripple effect with post-touch fade
+    return ripple * distanceFade * timeFade * fadeOutFactor;
 }
 
 // Modify existing pattern functions to include touch ripple
-float noisePattern(float2 uv, float2 grid, float time, float speed, float dotSize, float2 resolution, float2 touchPos, float touchTime) {
+float noisePattern(float2 uv, float2 grid, float time, float speed, float dotSize, float2 resolution, float2 touchPos, float touchTime, float touchEndTime) {
     // Create base dot grid
     float2 gridPos = fract(uv * grid);
     float2 center = gridPos - 0.5;
@@ -151,14 +164,13 @@ float noisePattern(float2 uv, float2 grid, float time, float speed, float dotSiz
     float mask = smoothstep(0.3, 0.7, combinedNoise);
     
     // Add touch ripple
-    float ripple = touchRipple(uv, touchPos, touchTime, speed);
+    float ripple = touchRipple(uv, touchPos, touchTime, touchEndTime, speed);
     
     // Blend with existing pattern
     return basePattern * (mask * 0.8 + 0.2 + ripple * 0.5);
 }
 
-fragment float4 pattern_dots(VertexOut in [[stage_in]],
-                           constant ShaderConfig &config [[buffer(0)]]) {
+fragment float4 pattern_dots(VertexOut in [[stage_in]], constant ShaderConfig &config [[buffer(0)]]) {
     float2 uv = in.uv;
     float aspectRatio = config.resolution.x / config.resolution.y;
     
@@ -166,22 +178,54 @@ fragment float4 pattern_dots(VertexOut in [[stage_in]],
     float2 aspectCorrectedUV = float2(uv.x * aspectRatio, uv.y);
     float2 grid = float2(config.patternScale.x * aspectRatio, config.patternScale.y);
     
-    float pattern;
-    // Get base pattern
-    if (config.patternType == 0) {
-        pattern = verticalWavePattern(aspectCorrectedUV, grid, config.time, config.patternSpeed, config.dotSize);
-    } else if (config.patternType == 1) {
-        pattern = circularWavePattern(aspectCorrectedUV, grid, config.time, config.patternSpeed, config.dotSize, config.resolution);
-    } else if (config.patternType == 2) {
-        pattern = ripplePattern(aspectCorrectedUV, grid, config.time, config.patternSpeed, config.dotSize, config.resolution);
-    } else {
-        pattern = noisePattern(aspectCorrectedUV, grid, config.time, config.patternSpeed, 
-                             config.dotSize, config.resolution, config.touchPosition, config.touchTime);
-    }
+    // Get ripple influence
+    float ripple = touchRipple(aspectCorrectedUV, config.touchPosition, config.touchTime, config.touchTime, config.patternSpeed);
     
-    // Add touch ripple to all patterns with stronger effect
-    float ripple = touchRipple(aspectCorrectedUV, config.touchPosition, config.touchTime, config.patternSpeed);
-    pattern = mix(pattern, 1.0, ripple * 0.7); // Stronger blend
+    float pattern;
+    if (config.patternType == 0) {
+        // Calculate base dot pattern
+        float2 gridPos = fract(aspectCorrectedUV * grid);
+        float2 center = gridPos - 0.5;
+        float dots = length(center * 2.0);
+        float dynamicDotSize = config.dotSize * (1.0 + ripple * 3.0);
+        
+        float wave = sin(aspectCorrectedUV.y * 3.14159 + config.time * config.patternSpeed) * 0.5 + 0.5;
+        dynamicDotSize = mix(dynamicDotSize * 0.5, dynamicDotSize * 1.5, wave);
+        pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.005, dots);
+    } else if (config.patternType == 1) {
+        // Calculate base dot pattern
+        float2 gridPos = fract(aspectCorrectedUV * grid);
+        float2 center = gridPos - 0.5;
+        float dots = length(center * 2.0);
+        float dynamicDotSize = config.dotSize * (1.0 + ripple * 3.0);
+        
+        // Circular wave pattern
+        float2 centerOffset = float2(0.4, 0.5);
+        float2 screenCenter = aspectCorrectedUV - centerOffset;
+        float distFromCenter = length(screenCenter * 2.0) * 4.0;
+        float wave = sin(distFromCenter - config.time * config.patternSpeed) * 0.5 + 0.5;
+        dynamicDotSize = mix(dynamicDotSize * 0.4, dynamicDotSize * 2.0, wave);
+        pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.005, dots);
+    } else if (config.patternType == 2) {
+        // Calculate base dot pattern
+        float2 gridPos = fract(aspectCorrectedUV * grid);
+        float2 center = gridPos - 0.5;
+        float dots = length(center * 2.0);
+        float dynamicDotSize = config.dotSize * (1.0 + ripple * 3.0);
+        
+        // Ripple pattern
+        float2 centerOffset = float2(0.4, 0.5);
+        float2 pos = aspectCorrectedUV - centerOffset;
+        float dist = length(pos * 2.0);
+        float baseRipple = sin((dist * 4.0 - config.time * config.patternSpeed) * 3.14159) / (1.0 + dist * 3.0);
+        dynamicDotSize = mix(dynamicDotSize * 0.4, dynamicDotSize * 2.0, baseRipple * 0.5 + 0.5);
+        pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.005, dots);
+    } else {
+        // Use the noise pattern directly
+        pattern = noisePattern(aspectCorrectedUV, grid, config.time, config.patternSpeed, 
+                             config.dotSize, config.resolution, config.touchPosition, 
+                             config.touchTime, config.touchTime);
+    }
     
     return mix(float4(0, 0, 0, 1), float4(1, 1, 1, 1), pattern);
 }
