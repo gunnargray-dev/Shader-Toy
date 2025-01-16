@@ -116,25 +116,29 @@ float touchRipple(float2 uv, float2 touchPos, float touchTime, float touchEndTim
     float dist = length(delta);
     
     // Constants for ripple animation
-    float duration = 1.5;           // Faster animation (was 3.0)
-    float maxRadius = 0.8;          // Smaller radius (was 1.5)
-    float waveCount = 2.0;          // Keep two waves
+    float duration = 1.5;
+    float maxRadius = 0.8;
+    float waveCount = 2.0;
     
-    // Calculate ripple phase
+    // Create continuous ripple during drag
+    float dragRipple = smoothstep(0.2, 0.0, dist) * 0.5; // Constant ripple around touch point
+    
+    // Calculate expanding ripple phase
     float progress = touchTime / duration;
     float currentRadius = progress * maxRadius;
     float phase = (dist - currentRadius) * 6.28318 * waveCount;
     
     // Create more pronounced wave
     float wave = sin(phase) * 0.5 + 0.5;
-    wave = pow(wave, 0.7); // Keep wave sharpness
+    wave = pow(wave, 0.7);
     
     // Fade based on time and distance
     float timeFade = smoothstep(1.0, 0.0, progress);
     float distanceFade = smoothstep(currentRadius + 0.05, currentRadius - 0.05, dist);
     
-    // Keep increased intensity
-    return wave * timeFade * distanceFade * 1.5;
+    // Combine both ripple effects
+    float expandingRipple = wave * timeFade * distanceFade * 1.5;
+    return max(expandingRipple, dragRipple); // Use stronger of the two effects
 }
 
 // Modify existing pattern functions to include touch ripple

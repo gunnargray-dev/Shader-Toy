@@ -102,16 +102,19 @@ struct ShaderPatternView: UIViewRepresentable {
         func handleTouch(_ position: CGPoint?) {
             if let position = position {
                 // If this is a new touch or touch at a different position
-                if touchPosition == nil || (lastTouchPosition != position) {
+                if touchPosition == nil {
+                    // Start new ripple only on initial touch
                     touchStartTime = currentTime
                     touchEndTime = -1
                     print("New touch detected at: \(position)")
+                } else if lastTouchPosition != position {
+                    // During drag, update position but don't reset timing
+                    print("Touch moved to: \(position)")
                 }
                 touchPosition = position
                 lastTouchPosition = position
             } else {
                 touchEndTime = currentTime
-                // Don't clear touchPosition yet, let it fade out
                 lastTouchPosition = nil
             }
         }
