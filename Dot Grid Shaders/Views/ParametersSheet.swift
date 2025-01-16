@@ -6,6 +6,25 @@ struct ParametersSheet: View {
     @Binding var animationSpeed: Double
     @Binding var isPlaying: Bool
     @Binding var selectedPattern: PatternType
+    @Binding var isMultiColored: Bool
+    @Binding var gradientSpeed: Double
+
+    init(patternDensity: Binding<Double>,
+         dotSize: Binding<Double>,
+         animationSpeed: Binding<Double>,
+         isPlaying: Binding<Bool>,
+         selectedPattern: Binding<PatternType>,
+         isMultiColored: Binding<Bool>,
+         gradientSpeed: Binding<Double>)
+    {
+        _patternDensity = patternDensity
+        _dotSize = dotSize
+        _animationSpeed = animationSpeed
+        _isPlaying = isPlaying
+        _selectedPattern = selectedPattern
+        _isMultiColored = isMultiColored
+        _gradientSpeed = gradientSpeed
+    }
 
     var body: some View {
         NavigationView {
@@ -60,6 +79,22 @@ struct ParametersSheet: View {
                     }
                     .padding(.horizontal)
 
+                    // Color Controls
+                    VStack(alignment: .leading, spacing: 20) {
+                        Toggle("Multi-Color Mode", isOn: $isMultiColored)
+                            .tint(.primary)
+
+                        if isMultiColored {
+                            VStack(alignment: .leading) {
+                                Text("Gradient Speed")
+                                    .foregroundColor(.secondary)
+                                Slider(value: $gradientSpeed, in: 0.1 ... 2.0)
+                                    .tint(.primary)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+
                     Color.clear.frame(height: 20)
                 }
                 .padding(.top)
@@ -77,6 +112,8 @@ struct ParametersSheet: View {
         dotSize: .constant(0.15),
         animationSpeed: .constant(0.8),
         isPlaying: .constant(false),
-        selectedPattern: .constant(.verticalWave)
+        selectedPattern: .constant(.verticalWave),
+        isMultiColored: .constant(false),
+        gradientSpeed: .constant(1.0)
     )
 }

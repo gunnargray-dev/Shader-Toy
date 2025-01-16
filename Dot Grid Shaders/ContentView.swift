@@ -8,6 +8,8 @@ struct ContentView: View {
     @State private var selectedPattern: PatternType = .verticalWave
     @State private var touchPosition: CGPoint?
     @State private var isShowingSheet = true
+    @State private var isMultiColored: Bool = false
+    @State private var gradientSpeed: Double = 1.0
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -21,7 +23,13 @@ struct ContentView: View {
                     colorB: SIMD4<Float>(0, 0, 0, 1),
                     patternSpeed: Float(animationSpeed),
                     dotSize: Float(dotSize),
-                    patternType: selectedPattern.rawValue
+                    patternType: selectedPattern.rawValue,
+                    touchPosition: SIMD2<Float>(-1, -1),
+                    touchTime: 0,
+                    touchEndTime: -1,
+                    isMultiColored: isMultiColored ? 1 : 0,
+                    gradientSpeed: Float(gradientSpeed),
+                    padding: 0
                 ),
                 isPlaying: isPlaying,
                 touchPosition: $touchPosition
@@ -34,7 +42,9 @@ struct ContentView: View {
                 dotSize: $dotSize,
                 animationSpeed: $animationSpeed,
                 isPlaying: $isPlaying,
-                selectedPattern: $selectedPattern
+                selectedPattern: $selectedPattern,
+                isMultiColored: $isMultiColored,
+                gradientSpeed: $gradientSpeed
             )
             .presentationDetents([.height(60), .fraction(0.45)])
             .presentationDragIndicator(.visible)

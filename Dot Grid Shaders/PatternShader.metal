@@ -12,7 +12,10 @@ struct ShaderConfig {
     int32_t patternType;
     float2 touchPosition;
     float touchTime;
-    float padding; // Add padding to ensure 16-byte alignment
+    float touchEndTime;
+    int32_t isMultiColored;
+    float gradientSpeed;
+    float padding;
 };
 
 struct VertexOut {
@@ -171,6 +174,29 @@ float noisePattern(float2 uv, float2 grid, float time, float speed, float dotSiz
     return basePattern * (mask * 0.8 + 0.2 + ripple * 0.5);
 }
 
+float3 getGradientColor(float2 uv, float time, float speed) {
+    // Create animated gradient
+    float t = (uv.x + uv.y + time * speed) * 0.5;
+    
+    // Create smooth color transitions
+    float3 color1 = float3(0.8, 0.2, 0.3); // Red
+    float3 color2 = float3(0.2, 0.5, 0.8); // Blue
+    float3 color3 = float3(0.3, 0.8, 0.2); // Green
+    
+    float3 finalColor;
+    float t3 = fract(t) * 3.0;
+    
+    if (t3 < 1.0) {
+        finalColor = mix(color1, color2, t3);
+    } else if (t3 < 2.0) {
+        finalColor = mix(color2, color3, t3 - 1.0);
+    } else {
+        finalColor = mix(color3, color1, t3 - 2.0);
+    }
+    
+    return finalColor;
+}
+
 fragment float4 pattern_dots(VertexOut in [[stage_in]], constant ShaderConfig &config [[buffer(0)]]) {
     float2 uv = in.uv;
     float aspectRatio = config.resolution.x / config.resolution.y;
@@ -228,5 +254,13 @@ fragment float4 pattern_dots(VertexOut in [[stage_in]], constant ShaderConfig &c
                              config.touchTime, config.touchTime);
     }
     
-    return mix(float4(0, 0, 0, 1), float4(1, 1, 1, 1), pattern);
+    float4 finalColor;
+    if (config.isMultiColored == 1) {
+        float3 gradientColor = getGradientColor(aspectCorrectedUV, config.time, config.gradientSpeed);
+        finalColor = float4(mix(float3(0), gradientColor, pattern), 1.0);
+    } else {
+        finalColor = mix(float4(0, 0, 0, 1), float4(1, 1, 1, 1), pattern);
+    }
+    
+    return finalColor;
 }

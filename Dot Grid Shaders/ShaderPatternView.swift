@@ -40,6 +40,8 @@ struct ShaderPatternView: UIViewRepresentable {
         context.coordinator.patternSpeed = config.patternSpeed
         context.coordinator.patternType = config.patternType
         context.coordinator.isPlaying = isPlaying
+        context.coordinator.isMultiColored = config.isMultiColored
+        context.coordinator.gradientSpeed = config.gradientSpeed
 
         // Debug print
         print("Updated view with pattern type: \(config.patternType)")
@@ -62,7 +64,9 @@ struct ShaderPatternView: UIViewRepresentable {
         var touchPosition: CGPoint?
         var touchStartTime: Float = 0
         var touchEndTime: Float = -1
-        var lastTouchPosition: CGPoint? // Track last touch to detect new touches
+        var lastTouchPosition: CGPoint?
+        var isMultiColored: Int32 = 0
+        var gradientSpeed: Float = 1.0
 
         init(_ parent: ShaderPatternView) {
             self.parent = parent
@@ -144,7 +148,13 @@ struct ShaderPatternView: UIViewRepresentable {
                 colorB: SIMD4<Float>(0, 0, 0, 1),
                 patternSpeed: patternSpeed,
                 dotSize: dotSize,
-                patternType: patternType
+                patternType: patternType,
+                touchPosition: SIMD2<Float>(-1, -1),
+                touchTime: 0,
+                touchEndTime: -1,
+                isMultiColored: isMultiColored,
+                gradientSpeed: gradientSpeed,
+                padding: 0
             )
 
             if let touch = touchPosition {
@@ -160,10 +170,6 @@ struct ShaderPatternView: UIViewRepresentable {
                     touchPosition = nil
                     touchEndTime = -1
                 }
-            } else {
-                config.touchPosition = SIMD2<Float>(-1, -1)
-                config.touchTime = 0
-                config.touchEndTime = -1
             }
 
             encoder.setRenderPipelineState(pipelineState)
