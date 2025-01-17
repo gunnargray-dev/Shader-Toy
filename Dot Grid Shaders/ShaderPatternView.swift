@@ -35,7 +35,7 @@ struct ShaderPatternView: UIViewRepresentable {
     }
 
     func updateUIView(_: TouchableMTKView, context: Context) {
-        let aspectRatio = context.coordinator.resolution.x / context.coordinator.resolution.y
+        _ = context.coordinator.resolution.x / context.coordinator.resolution.y
 
         // Use a single base scale value to maintain uniformity
         let baseScale = Float(config.patternScale.x)
