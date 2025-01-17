@@ -7,6 +7,11 @@ struct ShaderPatternView: UIViewRepresentable {
     var isPlaying: Bool
     @Binding var touchPosition: CGPoint?
 
+    // Add density configuration
+    private let gridDensity: Float = 1.0 // Base density multiplier
+    private let minDensity: Float = 1.0 // Minimum density
+    private let maxDensity: Float = 5.0 // Maximum density
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
@@ -37,13 +42,17 @@ struct ShaderPatternView: UIViewRepresentable {
     func updateUIView(_: TouchableMTKView, context: Context) {
         _ = context.coordinator.resolution.x / context.coordinator.resolution.y
 
-        // Use a single base scale value to maintain uniformity
-        let baseScale = Float(config.patternScale.x)
+        // Calculate grid density with bounds checking
+        let density = min(max(gridDensity, minDensity), maxDensity)
+
+        // Apply density to base scale while maintaining proportions
+        let baseScale = Float(config.patternScale.x) * density
         let correctedScale = SIMD2<Float>(
             baseScale,
-            baseScale // Keep y-scale same as x-scale
+            baseScale // Keep y-scale same as x-scale for equal spacing
         )
 
+        // Update coordinator with new values
         context.coordinator.patternScale = correctedScale
         context.coordinator.dotSize = Float(config.dotSize)
         context.coordinator.patternSpeed = config.patternSpeed

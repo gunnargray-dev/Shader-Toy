@@ -209,12 +209,10 @@ fragment float4 pattern_dots(VertexOut in [[stage_in]], constant ShaderConfig &c
     float2 normalizedUV = float2(uv.x * aspectRatio, uv.y);
     
     // Step 2: Grid Spacing Configuration
-    // patternScale.x determines how many dots fit in the normalized space
-    // Multiply x by aspectRatio to compensate for the UV stretching above
-    // This maintains equal spacing between dots in both directions
+    float baseGridDensity = 2.0; // Increase this value for denser grid
     float2 grid = float2(
-        config.patternScale.x * aspectRatio,  // Horizontal dot count
-        config.patternScale.y                // Vertical dot count (configurable)
+        config.patternScale.x * aspectRatio * baseGridDensity,  // Denser horizontal spacing
+        config.patternScale.y * baseGridDensity                 // Denser vertical spacing
     );
     
     // Step 3: Grid Cell Calculation
@@ -247,8 +245,11 @@ fragment float4 pattern_dots(VertexOut in [[stage_in]], constant ShaderConfig &c
     float pattern;
     if (config.patternType == 0) {  // Wave pattern
         float wave = sin(uv.y * 3.14159 + config.time * config.patternSpeed) * 0.5 + 0.5;
-        float dynamicDotSize = mix(baseDotSize * 0.5, baseDotSize * 1.5, wave);
-        pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.005, dots);
+        // Increase wave contrast
+        wave = pow(wave, 1.2);  // Makes peaks brighter and valleys darker
+        float dynamicDotSize = mix(baseDotSize * 0.3, baseDotSize * 1.7, wave);
+        // Sharper dot edges
+        pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.002, dots);
     }
     else if (config.patternType == 1) {  // Circular wave
         float2 screenCenter = normalizedUV - float2(0.5 * aspectRatio, 0.5);
@@ -272,15 +273,19 @@ fragment float4 pattern_dots(VertexOut in [[stage_in]], constant ShaderConfig &c
                              config.touchTime, config.touchTime);
     }
     
-    // Apply ripple effect
-    float rippleDotSize = baseDotSize * (1.0 + ripple * 3.0);
-    pattern = mix(pattern, smoothstep(rippleDotSize, rippleDotSize - 0.005, dots), ripple);
+    // Apply ripple effect with increased contrast
+    float rippleDotSize = baseDotSize * (1.0 + ripple * 4.0); // Increased ripple intensity
+    pattern = mix(pattern, smoothstep(rippleDotSize, rippleDotSize - 0.002, dots), ripple);
+    
+    // Increase overall pattern contrast
+    pattern = pow(pattern, 0.8); // Makes light areas brighter while keeping dark areas dark
     
     float4 finalColor;
     if (config.isMultiColored == 1) {
         float3 gradientColor = getGradientColor(normalizedUV, config.time, config.gradientSpeed);
         finalColor = float4(mix(float3(0), gradientColor, pattern), 1.0);
     } else {
+        // Increased contrast for monochrome mode
         finalColor = mix(float4(0, 0, 0, 1), float4(1, 1, 1, 1), pattern);
     }
     
