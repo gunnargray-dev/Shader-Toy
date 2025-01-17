@@ -13,48 +13,72 @@ struct ShaderPatternView: UIViewRepresentable {
     private let maxDensity: Float = 5.0
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        print("ShaderPatternView: makeCoordinator called")
+        let coordinator = Coordinator(self)
+        coordinator.updateState(config: config, isPlaying: isPlaying)
+        return coordinator
     }
 
     func makeUIView(context: Context) -> TouchableMTKView {
+        print("ShaderPatternView: makeUIView called")
         let mtkView = TouchableMTKView()
-        mtkView.delegate = context.coordinator
-        mtkView.touchHandler = { position in
-            context.coordinator.handleTouch(position)
-        }
-
         guard let device = MTLCreateSystemDefaultDevice() else {
             fatalError("Metal is not supported on this device")
         }
 
-        mtkView.device = device
-        mtkView.framebufferOnly = false
-        mtkView.drawableSize = mtkView.frame.size
-        mtkView.preferredFramesPerSecond = 60
-        mtkView.enableSetNeedsDisplay = false
-        mtkView.isPaused = false
-        mtkView.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
+        // Set resolution before any calculations
+        let screenSize = UIScreen.main.bounds.size
+        context.coordinator.resolution = SIMD2<Float>(
+            Float(screenSize.width),
+            Float(screenSize.height)
+        )
+        print("ShaderPatternView: Setting initial resolution =", context.coordinator.resolution)
 
+        // Setup Metal first
         context.coordinator.setupMetal(device: device)
+
+        // Then configure view
+        mtkView.device = device
+        mtkView.delegate = context.coordinator
+        mtkView.framebufferOnly = false
+        mtkView.drawableSize = CGSize(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
+        mtkView.preferredFramesPerSecond = 60
+        mtkView.enableSetNeedsDisplay = true
+        mtkView.isPaused = false
+
+        // Force initial render
+        mtkView.draw()
+
+        print("ShaderPatternView: Initial resolution =", context.coordinator.resolution)
+        print("ShaderPatternView: Initial patternScale =", context.coordinator.patternScale)
         return mtkView
     }
 
     func updateUIView(_: TouchableMTKView, context: Context) {
+        print("ShaderPatternView: updateUIView called")
+
+        // Guard against zero values
+        guard context.coordinator.resolution.y > 0 else {
+            print("ShaderPatternView: Invalid resolution")
+            return
+        }
+
         let aspectRatio = context.coordinator.resolution.x / context.coordinator.resolution.y
+        print("ShaderPatternView: resolution =", context.coordinator.resolution)
+        print("ShaderPatternView: aspectRatio =", aspectRatio)
 
-        // Calculate uniform grid density
         let density = min(max(gridDensity, minDensity), maxDensity)
-
-        // Calculate base grid scale that maintains uniform spacing
         let baseScale = Float(config.patternScale.x) * density
 
-        // Apply uniform scaling while preserving aspect ratio
-        let gridScale = SIMD2<Float>(
-            baseScale * aspectRatio, // Scale horizontal by aspect ratio
-            baseScale // Keep vertical scale uniform
-        )
+        // Guard against NaN values
+        let safeAspectRatio = aspectRatio.isNaN ? 1.0 : aspectRatio
 
-        // Update coordinator with uniform grid
+        let gridScale = SIMD2<Float>(
+            baseScale * safeAspectRatio,
+            baseScale
+        )
+        print("ShaderPatternView: gridScale =", gridScale)
+
         context.coordinator.patternScale = gridScale
         context.coordinator.dotSize = Float(config.dotSize)
         context.coordinator.patternSpeed = config.patternSpeed
@@ -72,12 +96,12 @@ struct ShaderPatternView: UIViewRepresentable {
         var currentTime: Float = 0
 
         // State properties
+        var resolution: SIMD2<Float>
         var patternScale: SIMD2<Float>
         var dotSize: Float
         var patternSpeed: Float
-        var isPlaying: Bool = false
-        var resolution = SIMD2<Float>(0, 0)
-        var patternType: Int32 = 0
+        var patternType: Int32
+        var isPlaying: Bool
         var touchPosition: CGPoint?
         var touchStartTime: Float = 0
         var touchEndTime: Float = -1
@@ -87,23 +111,41 @@ struct ShaderPatternView: UIViewRepresentable {
 
         init(_ parent: ShaderPatternView) {
             self.parent = parent
-            patternScale = parent.config.patternScale
+
+            // Set initial values immediately
+            resolution = SIMD2<Float>(
+                Float(UIScreen.main.bounds.width),
+                Float(UIScreen.main.bounds.height)
+            )
+            let aspectRatio = resolution.x / resolution.y
+            patternScale = SIMD2<Float>(
+                parent.config.patternScale.x * aspectRatio,
+                parent.config.patternScale.x
+            )
             dotSize = parent.config.dotSize
             patternSpeed = parent.config.patternSpeed
+            patternType = parent.config.patternType
+            isPlaying = parent.isPlaying
+            isMultiColored = parent.config.isMultiColored
+            gradientSpeed = parent.config.gradientSpeed
+
             super.init()
         }
 
-        func mtkView(_: MTKView, drawableSizeWillChange size: CGSize) {
+        func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
             resolution = SIMD2<Float>(Float(size.width), Float(size.height))
+            view.setNeedsDisplay()
         }
 
         func draw(in view: MTKView) {
+            print("Coordinator: draw called")
             guard let drawable = view.currentDrawable,
                   let commandBuffer = commandQueue?.makeCommandBuffer(),
                   let pipelineState = pipelineState,
                   let descriptor = view.currentRenderPassDescriptor,
                   let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor)
             else {
+                print("Coordinator: draw guard check failed")
                 return
             }
 
@@ -159,6 +201,7 @@ struct ShaderPatternView: UIViewRepresentable {
                   let vertexFunction = library.makeFunction(name: "pattern_vertex"),
                   let fragmentFunction = library.makeFunction(name: "pattern_dots")
             else {
+                print("Failed to create Metal functions")
                 return
             }
 
@@ -190,6 +233,18 @@ struct ShaderPatternView: UIViewRepresentable {
                 touchEndTime = currentTime
                 lastTouchPosition = nil
             }
+        }
+
+        func updateState(config: ShaderConfig, isPlaying: Bool) {
+            print("Coordinator: updateState called")
+            print("Coordinator: config.patternScale =", config.patternScale)
+            patternScale = config.patternScale
+            dotSize = config.dotSize
+            patternSpeed = config.patternSpeed
+            patternType = config.patternType
+            self.isPlaying = isPlaying
+            isMultiColored = config.isMultiColored
+            gradientSpeed = config.gradientSpeed
         }
 
         // ... rest of Coordinator implementation

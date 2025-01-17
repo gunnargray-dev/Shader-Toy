@@ -11,6 +11,9 @@ struct ContentView: View {
     @State private var isMultiColored: Bool = false
     @State private var gradientSpeed: Double = 1.0
 
+    // Add this to force initial update
+    @State private var hasAppeared: Bool = false
+
     var body: some View {
         ZStack(alignment: .bottom) {
             // Main Pattern View
@@ -23,7 +26,7 @@ struct ContentView: View {
                     colorB: SIMD4<Float>(0, 0, 0, 1),
                     patternSpeed: Float(animationSpeed),
                     dotSize: Float(dotSize),
-                    patternType: selectedPattern.rawValue,
+                    patternType: selectedPattern.id,
                     touchPosition: SIMD2<Float>(-1, -1),
                     touchTime: 0,
                     touchEndTime: -1,
@@ -35,20 +38,27 @@ struct ContentView: View {
                 touchPosition: $touchPosition
             )
             .ignoresSafeArea()
-        }
-        .sheet(isPresented: $isShowingSheet) {
-            ParametersSheet(
-                patternDensity: $patternDensity,
-                dotSize: $dotSize,
-                animationSpeed: $animationSpeed,
-                isPlaying: $isPlaying,
-                selectedPattern: $selectedPattern,
-                isMultiColored: $isMultiColored,
-                gradientSpeed: $gradientSpeed
-            )
-            .presentationDetents([.height(60), .fraction(0.45)])
-            .presentationDragIndicator(.visible)
-            .interactiveDismissDisabled()
+            .onAppear {
+                print("ContentView: onAppear triggered")
+                print("ContentView: Initial patternDensity =", patternDensity)
+                patternDensity += 0.001
+                print("ContentView: Updated patternDensity =", patternDensity)
+                hasAppeared = true
+            }
+            .sheet(isPresented: $isShowingSheet) {
+                ParametersSheet(
+                    patternDensity: $patternDensity,
+                    dotSize: $dotSize,
+                    animationSpeed: $animationSpeed,
+                    isPlaying: $isPlaying,
+                    selectedPattern: $selectedPattern,
+                    isMultiColored: $isMultiColored,
+                    gradientSpeed: $gradientSpeed
+                )
+                .presentationDetents([.height(60), .fraction(0.45)])
+                .presentationDragIndicator(.visible)
+                .interactiveDismissDisabled()
+            }
         }
         .preferredColorScheme(.dark)
     }
