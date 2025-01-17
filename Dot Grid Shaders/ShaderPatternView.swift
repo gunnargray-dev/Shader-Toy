@@ -26,8 +26,8 @@ struct ShaderPatternView: UIViewRepresentable {
         mtkView.framebufferOnly = false
         mtkView.drawableSize = mtkView.frame.size
         mtkView.preferredFramesPerSecond = 60
-        mtkView.enableSetNeedsDisplay = false // Continuous rendering
-        mtkView.isPaused = false // Never pause the display link
+        mtkView.enableSetNeedsDisplay = false
+        mtkView.isPaused = false
         mtkView.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
 
         context.coordinator.setupMetal(device: device)
@@ -35,16 +35,22 @@ struct ShaderPatternView: UIViewRepresentable {
     }
 
     func updateUIView(_: TouchableMTKView, context: Context) {
-        context.coordinator.patternScale = config.patternScale
-        context.coordinator.dotSize = config.dotSize
+        let aspectRatio = context.coordinator.resolution.x / context.coordinator.resolution.y
+
+        // Use a single base scale value to maintain uniformity
+        let baseScale = Float(config.patternScale.x)
+        let correctedScale = SIMD2<Float>(
+            baseScale,
+            baseScale // Keep y-scale same as x-scale
+        )
+
+        context.coordinator.patternScale = correctedScale
+        context.coordinator.dotSize = Float(config.dotSize)
         context.coordinator.patternSpeed = config.patternSpeed
         context.coordinator.patternType = config.patternType
         context.coordinator.isPlaying = isPlaying
         context.coordinator.isMultiColored = config.isMultiColored
         context.coordinator.gradientSpeed = config.gradientSpeed
-
-        // Debug print
-        print("Updated view with pattern type: \(config.patternType)")
     }
 
     class Coordinator: NSObject, MTKViewDelegate {
@@ -54,7 +60,7 @@ struct ShaderPatternView: UIViewRepresentable {
         var pipelineState: MTLRenderPipelineState?
         var currentTime: Float = 0
 
-        // Separate state properties
+        // State properties
         var patternScale: SIMD2<Float>
         var dotSize: Float
         var patternSpeed: Float
@@ -76,51 +82,8 @@ struct ShaderPatternView: UIViewRepresentable {
             super.init()
         }
 
-        func setupMetal(device: MTLDevice) {
-            self.device = device
-            commandQueue = device.makeCommandQueue()
-
-            guard let library = device.makeDefaultLibrary(),
-                  let vertexFunction = library.makeFunction(name: "pattern_vertex"),
-                  let fragmentFunction = library.makeFunction(name: "pattern_dots")
-            else {
-                return
-            }
-
-            let pipelineDescriptor = MTLRenderPipelineDescriptor()
-            pipelineDescriptor.vertexFunction = vertexFunction
-            pipelineDescriptor.fragmentFunction = fragmentFunction
-            pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-
-            do {
-                pipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
-            } catch {
-                print("Failed to create pipeline state: \(error)")
-            }
-        }
-
         func mtkView(_: MTKView, drawableSizeWillChange size: CGSize) {
             resolution = SIMD2<Float>(Float(size.width), Float(size.height))
-        }
-
-        func handleTouch(_ position: CGPoint?) {
-            if let position = position {
-                // If this is a new touch or touch at a different position
-                if touchPosition == nil {
-                    // Start new ripple only on initial touch
-                    touchStartTime = currentTime
-                    touchEndTime = -1
-                    print("New touch detected at: \(position)")
-                } else if lastTouchPosition != position {
-                    // During drag, update position but don't reset timing
-                    print("Touch moved to: \(position)")
-                }
-                touchPosition = position
-                lastTouchPosition = position
-            } else {
-                touchEndTime = currentTime
-                lastTouchPosition = nil
-            }
         }
 
         func draw(in view: MTKView) {
@@ -136,9 +99,6 @@ struct ShaderPatternView: UIViewRepresentable {
             if isPlaying {
                 currentTime += 1.0 / Float(view.preferredFramesPerSecond)
             }
-
-            // Debug print
-            print("Drawing with pattern type: \(patternType)")
 
             var config = ShaderConfig(
                 time: currentTime,
@@ -165,7 +125,6 @@ struct ShaderPatternView: UIViewRepresentable {
                 config.touchTime = currentTime - touchStartTime
                 config.touchEndTime = touchEndTime
 
-                // Clear touch state after animation duration (1.5 seconds)
                 if touchEndTime >= 0 && (currentTime - touchStartTime) > 1.5 {
                     touchPosition = nil
                     touchEndTime = -1
@@ -180,5 +139,48 @@ struct ShaderPatternView: UIViewRepresentable {
             commandBuffer.present(drawable)
             commandBuffer.commit()
         }
+
+        func setupMetal(device: MTLDevice) {
+            self.device = device
+            commandQueue = device.makeCommandQueue()
+
+            guard let library = device.makeDefaultLibrary(),
+                  let vertexFunction = library.makeFunction(name: "pattern_vertex"),
+                  let fragmentFunction = library.makeFunction(name: "pattern_dots")
+            else {
+                return
+            }
+
+            let pipelineDescriptor = MTLRenderPipelineDescriptor()
+            pipelineDescriptor.vertexFunction = vertexFunction
+            pipelineDescriptor.fragmentFunction = fragmentFunction
+            pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+
+            do {
+                pipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            } catch {
+                print("Failed to create pipeline state: \(error)")
+            }
+        }
+
+        func handleTouch(_ position: CGPoint?) {
+            if let position = position {
+                // If this is a new touch or touch at a different position
+                if touchPosition == nil {
+                    // Start new ripple only on initial touch
+                    touchStartTime = currentTime
+                    touchEndTime = -1
+                } else if lastTouchPosition != position {
+                    // During drag, update position but don't reset timing
+                }
+                touchPosition = position
+                lastTouchPosition = position
+            } else {
+                touchEndTime = currentTime
+                lastTouchPosition = nil
+            }
+        }
+
+        // ... rest of Coordinator implementation
     }
 }

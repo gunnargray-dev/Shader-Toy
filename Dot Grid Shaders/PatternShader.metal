@@ -198,65 +198,87 @@ float3 getGradientColor(float2 uv, float time, float speed) {
 }
 
 fragment float4 pattern_dots(VertexOut in [[stage_in]], constant ShaderConfig &config [[buffer(0)]]) {
+    // UV coordinates range from (0,0) to (1,1) across the screen
     float2 uv = in.uv;
+    // Screen's width/height ratio, used to correct for non-square screens
     float aspectRatio = config.resolution.x / config.resolution.y;
     
-    // Correct UV and grid for aspect ratio
-    float2 aspectCorrectedUV = float2(uv.x * aspectRatio, uv.y);
-    float2 grid = float2(config.patternScale.x * aspectRatio, config.patternScale.y);
+    // Step 1: UV Space Normalization
+    // Stretch the x-coordinate by aspectRatio to make cells square in screen space
+    // This ensures equal horizontal and vertical spacing in screen space
+    float2 normalizedUV = float2(uv.x * aspectRatio, uv.y);
+    
+    // Step 2: Grid Spacing Configuration
+    // patternScale.x determines how many dots fit in the normalized space
+    // Multiply x by aspectRatio to compensate for the UV stretching above
+    // This maintains equal spacing between dots in both directions
+    float2 grid = float2(
+        config.patternScale.x * aspectRatio,  // Horizontal dot count
+        config.patternScale.y                // Vertical dot count (configurable)
+    );
+    
+    // Step 3: Grid Cell Calculation
+    // fract() creates repeating cells of size 1/grid
+    // Each cell will contain one dot
+    float2 gridPos = fract(normalizedUV * grid);
+    
+    // Step 4: Dot Position in Cell
+    // Center the coordinate system in each cell (-0.5 to 0.5 range)
+    // Scale the y-coordinate by aspectRatio to maintain circular shape
+    float2 center = (gridPos - 0.5) * float2(1.0, aspectRatio);
+    
+    // Step 5: Dot Shape Calculation
+    // length() gives distance from cell center
+    // Divide by aspectRatio to counter the y-scaling above
+    // This ensures dots remain circular regardless of screen shape
+    float dots = length(center) / aspectRatio;
+    
+    // Step 6: Dot Size
+    // Base size for dots, scaled down to look better
+    float baseDotSize = config.dotSize * 0.5;
+    
+    // The final dot shape is created in the pattern calculation below
+    // smoothstep(size, size - 0.005, dots) creates the circular shape
+    // where 'size' determines the dot radius
     
     // Get ripple influence
-    float ripple = touchRipple(aspectCorrectedUV, config.touchPosition, config.touchTime, config.touchTime, config.patternSpeed);
+    float ripple = touchRipple(normalizedUV, config.touchPosition, config.touchTime, config.touchEndTime, config.patternSpeed);
     
     float pattern;
-    if (config.patternType == 0) {
-        // Calculate base dot pattern
-        float2 gridPos = fract(aspectCorrectedUV * grid);
-        float2 center = gridPos - 0.5;
-        float dots = length(center * 2.0);
-        float dynamicDotSize = config.dotSize * (1.0 + ripple * 3.0);
-        
-        float wave = sin(aspectCorrectedUV.y * 3.14159 + config.time * config.patternSpeed) * 0.5 + 0.5;
-        dynamicDotSize = mix(dynamicDotSize * 0.5, dynamicDotSize * 1.5, wave);
+    if (config.patternType == 0) {  // Wave pattern
+        float wave = sin(uv.y * 3.14159 + config.time * config.patternSpeed) * 0.5 + 0.5;
+        float dynamicDotSize = mix(baseDotSize * 0.5, baseDotSize * 1.5, wave);
         pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.005, dots);
-    } else if (config.patternType == 1) {
-        // Calculate base dot pattern
-        float2 gridPos = fract(aspectCorrectedUV * grid);
-        float2 center = gridPos - 0.5;
-        float dots = length(center * 2.0);
-        float dynamicDotSize = config.dotSize * (1.0 + ripple * 3.0);
+    }
+    else if (config.patternType == 1) {  // Circular wave
+        float2 screenCenter = normalizedUV - float2(0.5 * aspectRatio, 0.5);
+        float distFromCenter = length(screenCenter * 2.0);
         
-        // Circular wave pattern
-        float2 centerOffset = float2(0.4, 0.5);
-        float2 screenCenter = aspectCorrectedUV - centerOffset;
-        float distFromCenter = length(screenCenter * 2.0) * 4.0;
         float wave = sin(distFromCenter - config.time * config.patternSpeed) * 0.5 + 0.5;
-        dynamicDotSize = mix(dynamicDotSize * 0.4, dynamicDotSize * 2.0, wave);
+        float dynamicDotSize = mix(baseDotSize * 0.4, baseDotSize * 2.0, wave);
         pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.005, dots);
-    } else if (config.patternType == 2) {
-        // Calculate base dot pattern
-        float2 gridPos = fract(aspectCorrectedUV * grid);
-        float2 center = gridPos - 0.5;
-        float dots = length(center * 2.0);
-        float dynamicDotSize = config.dotSize * (1.0 + ripple * 3.0);
-        
-        // Ripple pattern
-        float2 centerOffset = float2(0.4, 0.5);
-        float2 pos = aspectCorrectedUV - centerOffset;
+    }
+    else if (config.patternType == 2) {  // Ripple
+        float2 pos = normalizedUV - float2(0.5 * aspectRatio, 0.5);
         float dist = length(pos * 2.0);
+        
         float baseRipple = sin((dist * 4.0 - config.time * config.patternSpeed) * 3.14159) / (1.0 + dist * 3.0);
-        dynamicDotSize = mix(dynamicDotSize * 0.4, dynamicDotSize * 2.0, baseRipple * 0.5 + 0.5);
+        float dynamicDotSize = mix(baseDotSize * 0.4, baseDotSize * 2.0, baseRipple * 0.5 + 0.5);
         pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.005, dots);
-    } else {
-        // Use the noise pattern directly
-        pattern = noisePattern(aspectCorrectedUV, grid, config.time, config.patternSpeed, 
-                             config.dotSize, config.resolution, config.touchPosition, 
+    }
+    else {  // Noise pattern
+        pattern = noisePattern(normalizedUV, grid, config.time, config.patternSpeed, 
+                             baseDotSize, config.resolution, config.touchPosition, 
                              config.touchTime, config.touchTime);
     }
     
+    // Apply ripple effect
+    float rippleDotSize = baseDotSize * (1.0 + ripple * 3.0);
+    pattern = mix(pattern, smoothstep(rippleDotSize, rippleDotSize - 0.005, dots), ripple);
+    
     float4 finalColor;
     if (config.isMultiColored == 1) {
-        float3 gradientColor = getGradientColor(aspectCorrectedUV, config.time, config.gradientSpeed);
+        float3 gradientColor = getGradientColor(normalizedUV, config.time, config.gradientSpeed);
         finalColor = float4(mix(float3(0), gradientColor, pattern), 1.0);
     } else {
         finalColor = mix(float4(0, 0, 0, 1), float4(1, 1, 1, 1), pattern);
