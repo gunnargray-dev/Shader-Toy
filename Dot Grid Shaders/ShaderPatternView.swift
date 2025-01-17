@@ -7,10 +7,10 @@ struct ShaderPatternView: UIViewRepresentable {
     var isPlaying: Bool
     @Binding var touchPosition: CGPoint?
 
-    // Add density configuration
-    private let gridDensity: Float = 1.0 // Base density multiplier
-    private let minDensity: Float = 1.0 // Minimum density
-    private let maxDensity: Float = 5.0 // Maximum density
+    // Grid configuration
+    private let gridDensity: Float = 1.0
+    private let minDensity: Float = 1.0
+    private let maxDensity: Float = 5.0
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -40,20 +40,22 @@ struct ShaderPatternView: UIViewRepresentable {
     }
 
     func updateUIView(_: TouchableMTKView, context: Context) {
-        _ = context.coordinator.resolution.x / context.coordinator.resolution.y
+        let aspectRatio = context.coordinator.resolution.x / context.coordinator.resolution.y
 
-        // Calculate grid density with bounds checking
+        // Calculate uniform grid density
         let density = min(max(gridDensity, minDensity), maxDensity)
 
-        // Apply density to base scale while maintaining proportions
+        // Calculate base grid scale that maintains uniform spacing
         let baseScale = Float(config.patternScale.x) * density
-        let correctedScale = SIMD2<Float>(
-            baseScale,
-            baseScale // Keep y-scale same as x-scale for equal spacing
+
+        // Apply uniform scaling while preserving aspect ratio
+        let gridScale = SIMD2<Float>(
+            baseScale * aspectRatio, // Scale horizontal by aspect ratio
+            baseScale // Keep vertical scale uniform
         )
 
-        // Update coordinator with new values
-        context.coordinator.patternScale = correctedScale
+        // Update coordinator with uniform grid
+        context.coordinator.patternScale = gridScale
         context.coordinator.dotSize = Float(config.dotSize)
         context.coordinator.patternSpeed = config.patternSpeed
         context.coordinator.patternType = config.patternType

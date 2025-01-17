@@ -16,6 +16,7 @@ struct ShaderConfig {
     int32_t isMultiColored;
     float gradientSpeed;
     float padding;
+    float2 dotSpacing;  // Controls space between dots (x: horizontal, y: vertical)
 };
 
 struct VertexOut {
@@ -112,40 +113,44 @@ float smoothNoise(float2 st) {
               mix(c, d, u.x), u.y);
 }
 
-float touchRipple(float2 uv, float2 touchPos, float touchTime, float touchEndTime, float speed) {
+float touchRipple(float2 uv, float2 touchPos, float touchTime, float touchEndTime, float speed, float aspectRatio) {
     if (touchPos.x < 0 || touchPos.y < 0) return 0.0;
     
-    float2 delta = uv - touchPos;
-    float dist = length(delta);
+    // Normalize coordinates to maintain circular shape
+    float2 normalizedUV = float2(uv.x * aspectRatio, uv.y);
+    float2 normalizedTouch = float2(touchPos.x * aspectRatio, touchPos.y);
+    
+    // Calculate distance in normalized space
+    float2 delta = normalizedUV - normalizedTouch;
+    float dist = length(delta) / aspectRatio; // Normalize the distance
     
     // Constants for ripple animation
     float duration = 1.5;
     float maxRadius = 0.8;
     float waveCount = 2.0;
     
-    // Create continuous ripple during drag
-    float dragRipple = smoothstep(0.2, 0.0, dist) * 0.5; // Constant ripple around touch point
+    // Create uniform circular ripple
+    float dragRipple = smoothstep(0.2, 0.0, dist) * 0.5;
     
-    // Calculate expanding ripple phase
+    // Calculate expanding ripple with uniform circular shape
     float progress = touchTime / duration;
     float currentRadius = progress * maxRadius;
     float phase = (dist - currentRadius) * 6.28318 * waveCount;
     
-    // Create more pronounced wave
     float wave = sin(phase) * 0.5 + 0.5;
     wave = pow(wave, 0.7);
     
-    // Fade based on time and distance
     float timeFade = smoothstep(1.0, 0.0, progress);
     float distanceFade = smoothstep(currentRadius + 0.05, currentRadius - 0.05, dist);
     
-    // Combine both ripple effects
     float expandingRipple = wave * timeFade * distanceFade * 1.5;
-    return max(expandingRipple, dragRipple); // Use stronger of the two effects
+    return max(expandingRipple, dragRipple);
 }
 
 // Modify existing pattern functions to include touch ripple
-float noisePattern(float2 uv, float2 grid, float time, float speed, float dotSize, float2 resolution, float2 touchPos, float touchTime, float touchEndTime) {
+float noisePattern(float2 uv, float2 grid, float time, float speed, float dotSize, 
+                  float2 resolution, float2 touchPos, float touchTime, float touchEndTime,
+                  float aspectRatio) {
     // Create base dot grid
     float2 gridPos = fract(uv * grid);
     float2 center = gridPos - 0.5;
@@ -167,8 +172,8 @@ float noisePattern(float2 uv, float2 grid, float time, float speed, float dotSiz
     // Create smooth mask with wider range
     float mask = smoothstep(0.3, 0.7, combinedNoise);
     
-    // Add touch ripple
-    float ripple = touchRipple(uv, touchPos, touchTime, touchEndTime, speed);
+    // Add touch ripple with aspectRatio
+    float ripple = touchRipple(uv, touchPos, touchTime, touchEndTime, speed, aspectRatio);
     
     // Blend with existing pattern
     return basePattern * (mask * 0.8 + 0.2 + ripple * 0.5);
@@ -198,94 +203,76 @@ float3 getGradientColor(float2 uv, float time, float speed) {
 }
 
 fragment float4 pattern_dots(VertexOut in [[stage_in]], constant ShaderConfig &config [[buffer(0)]]) {
-    // UV coordinates range from (0,0) to (1,1) across the screen
     float2 uv = in.uv;
-    // Screen's width/height ratio, used to correct for non-square screens
     float aspectRatio = config.resolution.x / config.resolution.y;
     
-    // Step 1: UV Space Normalization
-    // Stretch the x-coordinate by aspectRatio to make cells square in screen space
-    // This ensures equal horizontal and vertical spacing in screen space
-    float2 normalizedUV = float2(uv.x * aspectRatio, uv.y);
+    // Create uniform grid space
+    float2 normalizedUV = float2(uv.x, uv.y);
+    float2 grid = config.patternScale;
     
-    // Step 2: Grid Spacing Configuration
-    float baseGridDensity = 2.0; // Increase this value for denser grid
-    float2 grid = float2(
-        config.patternScale.x * aspectRatio * baseGridDensity,  // Denser horizontal spacing
-        config.patternScale.y * baseGridDensity                 // Denser vertical spacing
-    );
-    
-    // Step 3: Grid Cell Calculation
-    // fract() creates repeating cells of size 1/grid
-    // Each cell will contain one dot
+    // Calculate uniform grid positions
     float2 gridPos = fract(normalizedUV * grid);
     
-    // Step 4: Dot Position in Cell
-    // Center the coordinate system in each cell (-0.5 to 0.5 range)
-    // Scale the y-coordinate by aspectRatio to maintain circular shape
-    float2 center = (gridPos - 0.5) * float2(1.0, aspectRatio);
+    // Create perfect circles in grid cells
+    float2 center = gridPos - 0.5;
+    float dots = length(center * 2.0);
     
-    // Step 5: Dot Shape Calculation
-    // length() gives distance from cell center
-    // Divide by aspectRatio to counter the y-scaling above
-    // This ensures dots remain circular regardless of screen shape
-    float dots = length(center) / aspectRatio;
+    // Get ripple influence (keep existing ripple calculation)
+    float ripple = touchRipple(uv, config.touchPosition, config.touchTime, config.touchEndTime, config.patternSpeed, aspectRatio);
     
-    // Step 6: Dot Size
-    // Base size for dots, scaled down to look better
+    // Base dot size
     float baseDotSize = config.dotSize * 0.5;
     
-    // The final dot shape is created in the pattern calculation below
-    // smoothstep(size, size - 0.005, dots) creates the circular shape
-    // where 'size' determines the dot radius
-    
-    // Get ripple influence
-    float ripple = touchRipple(normalizedUV, config.touchPosition, config.touchTime, config.touchEndTime, config.patternSpeed);
-    
     float pattern;
-    if (config.patternType == 0) {  // Wave pattern
+    if (config.patternType == 0) {  // Wave pattern (keep existing)
         float wave = sin(uv.y * 3.14159 + config.time * config.patternSpeed) * 0.5 + 0.5;
-        // Increase wave contrast
-        wave = pow(wave, 1.2);  // Makes peaks brighter and valleys darker
-        float dynamicDotSize = mix(baseDotSize * 0.3, baseDotSize * 1.7, wave);
-        // Sharper dot edges
-        pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.002, dots);
+        float dynamicDotSize = mix(baseDotSize * 0.4, baseDotSize * 2.0, wave);
+        pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.005, dots);
     }
-    else if (config.patternType == 1) {  // Circular wave
-        float2 screenCenter = normalizedUV - float2(0.5 * aspectRatio, 0.5);
-        float distFromCenter = length(screenCenter * 2.0);
+    else if (config.patternType == 1) {  // Circular wave (Pulse)
+        // Normalize coordinates for uniform circular waves
+        float2 normalizedUV = float2(uv.x * aspectRatio, uv.y);
+        float2 normalizedCenter = float2(0.5 * aspectRatio, 0.5);
         
-        float wave = sin(distFromCenter - config.time * config.patternSpeed) * 0.5 + 0.5;
+        // Calculate distance in normalized space
+        float2 screenCenter = normalizedUV - normalizedCenter;
+        float distFromCenter = length(screenCenter) / aspectRatio;  // Normalize the distance
+        
+        // Create uniform circular pulse waves
+        float wave = sin(distFromCenter * 6.28318 - config.time * config.patternSpeed) * 0.5 + 0.5;
         float dynamicDotSize = mix(baseDotSize * 0.4, baseDotSize * 2.0, wave);
         pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.005, dots);
     }
     else if (config.patternType == 2) {  // Ripple
-        float2 pos = normalizedUV - float2(0.5 * aspectRatio, 0.5);
-        float dist = length(pos * 2.0);
+        // Normalize coordinates for uniform circular waves
+        float2 normalizedUV = float2(uv.x * aspectRatio, uv.y);
+        float2 normalizedCenter = float2(0.5 * aspectRatio, 0.5);
         
+        // Calculate distance in normalized space
+        float2 pos = normalizedUV - normalizedCenter;
+        float dist = length(pos) / aspectRatio;  // Normalize the distance
+        
+        // Create uniform circular ripple waves
         float baseRipple = sin((dist * 4.0 - config.time * config.patternSpeed) * 3.14159) / (1.0 + dist * 3.0);
         float dynamicDotSize = mix(baseDotSize * 0.4, baseDotSize * 2.0, baseRipple * 0.5 + 0.5);
         pattern = smoothstep(dynamicDotSize, dynamicDotSize - 0.005, dots);
     }
     else {  // Noise pattern
-        pattern = noisePattern(normalizedUV, grid, config.time, config.patternSpeed, 
+        pattern = noisePattern(uv, grid, config.time, config.patternSpeed, 
                              baseDotSize, config.resolution, config.touchPosition, 
-                             config.touchTime, config.touchTime);
+                             config.touchTime, config.touchTime, aspectRatio);
     }
     
-    // Apply ripple effect with increased contrast
-    float rippleDotSize = baseDotSize * (1.0 + ripple * 4.0); // Increased ripple intensity
-    pattern = mix(pattern, smoothstep(rippleDotSize, rippleDotSize - 0.002, dots), ripple);
+    // Apply ripple effect (keep existing)
+    float rippleDotSize = baseDotSize * (1.0 + ripple * 3.0);
+    pattern = mix(pattern, smoothstep(rippleDotSize, rippleDotSize - 0.005, dots), ripple);
     
-    // Increase overall pattern contrast
-    pattern = pow(pattern, 0.8); // Makes light areas brighter while keeping dark areas dark
-    
+    // Color calculation (keep existing)
     float4 finalColor;
     if (config.isMultiColored == 1) {
-        float3 gradientColor = getGradientColor(normalizedUV, config.time, config.gradientSpeed);
+        float3 gradientColor = getGradientColor(uv, config.time, config.gradientSpeed);
         finalColor = float4(mix(float3(0), gradientColor, pattern), 1.0);
     } else {
-        // Increased contrast for monochrome mode
         finalColor = mix(float4(0, 0, 0, 1), float4(1, 1, 1, 1), pattern);
     }
     
