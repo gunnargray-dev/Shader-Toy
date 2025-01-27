@@ -8,9 +8,9 @@ struct ShaderPatternView: UIViewRepresentable {
     @Binding var touchPosition: CGPoint?
 
     // Grid configuration
-    private let gridDensity: Float = 1.0
-    private let minDensity: Float = 1.0
-    private let maxDensity: Float = 5.0
+    let gridDensity: Float = 1.0
+    let minDensity: Float = 1.0
+    let maxDensity: Float = 5.0
 
     func makeCoordinator() -> Coordinator {
         print("ShaderPatternView: makeCoordinator called")
@@ -112,16 +112,24 @@ struct ShaderPatternView: UIViewRepresentable {
         init(_ parent: ShaderPatternView) {
             self.parent = parent
 
-            // Set initial values immediately
+            // Set initial values
             resolution = SIMD2<Float>(
                 Float(UIScreen.main.bounds.width),
                 Float(UIScreen.main.bounds.height)
             )
+
+            // Use the same scaling logic as updateUIView
             let aspectRatio = resolution.x / resolution.y
+            let safeAspectRatio = aspectRatio.isNaN ? 1.0 : aspectRatio
+            let density = min(max(parent.gridDensity, parent.minDensity), parent.maxDensity)
+            let baseScale = parent.config.patternScale.x * density
+
             patternScale = SIMD2<Float>(
-                parent.config.patternScale.x * aspectRatio,
-                parent.config.patternScale.x
+                baseScale * safeAspectRatio,
+                baseScale
             )
+
+            // Set other properties
             dotSize = parent.config.dotSize
             patternSpeed = parent.config.patternSpeed
             patternType = parent.config.patternType
@@ -130,6 +138,10 @@ struct ShaderPatternView: UIViewRepresentable {
             gradientSpeed = parent.config.gradientSpeed
 
             super.init()
+
+            print("Coordinator: init - resolution =", resolution)
+            print("Coordinator: init - aspectRatio =", safeAspectRatio)
+            print("Coordinator: init - patternScale =", patternScale)
         }
 
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {

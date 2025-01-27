@@ -55,7 +55,7 @@ struct ContentView: View {
                     isMultiColored: $isMultiColored,
                     gradientSpeed: $gradientSpeed
                 )
-                .presentationDetents([.height(60), .fraction(0.45)])
+                .presentationDetents([.height(64), .fraction(0.65)])
                 .presentationDragIndicator(.visible)
                 .interactiveDismissDisabled()
             }

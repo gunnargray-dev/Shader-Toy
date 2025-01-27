@@ -17,7 +17,6 @@ struct ShaderConfig {
     var isMultiColored: Int32 = 0
     var gradientSpeed: Float = 1.0
     var padding: Float = 0
-    var dotSpacing = SIMD2<Float>(1.0, 1.0)
 }
 
 enum PatternType: Int32, CaseIterable, Identifiable {

@@ -42,6 +42,7 @@ struct ParametersSheet: View {
                         )
                         .padding(.horizontal)
                     }
+                    
 
                     // Parameters
                     VStack(alignment: .leading, spacing: 20) {
@@ -51,6 +52,7 @@ struct ParametersSheet: View {
                             Slider(value: $patternDensity, in: 10 ... 100)
                                 .tint(.primary)
                         }
+                        
 
                         VStack(alignment: .leading) {
                             Text("Dot Size")
@@ -67,6 +69,7 @@ struct ParametersSheet: View {
                         }
                     }
                     .padding(.horizontal)
+                    
 
                     Button(action: {
                         isPlaying.toggle()
@@ -78,6 +81,7 @@ struct ParametersSheet: View {
                         }
                     }
                     .padding(.horizontal)
+                    
 
                     // Color Controls
                     VStack(alignment: .leading, spacing: 20) {
@@ -100,7 +104,7 @@ struct ParametersSheet: View {
                 .padding(.top)
             }
             .scrollIndicators(.hidden)
-            .navigationTitle("Pattern Settings")
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }
     }
