@@ -32,7 +32,7 @@ struct CustomSegmentedControl: View {
         .overlay {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.gray, lineWidth: 1)
-         }
+        }
     }
 
     @Namespace private var namespace
