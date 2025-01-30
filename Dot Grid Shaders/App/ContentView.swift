@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var particleCount: Double = 1000
     @State private var sphereSize: Double = 400.0
     @State private var isShowingSheet = false
+    @State private var isAudioEnabled = false
+    @StateObject private var audioProcessor = AudioProcessor()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -17,14 +19,20 @@ struct ContentView: View {
                     particleSpeed: animationSpeed,
                     particleSize: particleSize,
                     particleCount: Int(particleCount),
-                    sphereSize: sphereSize
+                    sphereSize: sphereSize,
+                    isAudioEnabled: $isAudioEnabled
                 )
+                .environmentObject(audioProcessor)
+                .onDisappear {
+                    audioProcessor.stopMonitoring()
+                }
                 .ignoresSafeArea()
             }
 
-            // Settings button
             VStack {
                 Spacer()
+
+                // Settings button
                 Button(action: { isShowingSheet = true }) {
                     Image(systemName: "slider.horizontal.3")
                         .font(.title2)
@@ -37,6 +45,20 @@ struct ContentView: View {
                         )
                 }
                 .padding(.bottom, 20)
+
+                // Audio toggle
+                Toggle("Audio Reactive", isOn: $isAudioEnabled)
+                    .padding()
+                    .background(Color(.sRGB, red: 0.2, green: 0.2, blue: 0.2, opacity: 0.8))
+                    .cornerRadius(10)
+                    .padding(.bottom)
+                    .onChange(of: isAudioEnabled) { _, newValue in
+                        if newValue {
+                            audioProcessor.startMonitoring()
+                        } else {
+                            audioProcessor.stopMonitoring()
+                        }
+                    }
             }
         }
         .sheet(isPresented: $isShowingSheet) {

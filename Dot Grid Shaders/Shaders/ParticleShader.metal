@@ -18,6 +18,7 @@ struct ParticleUniforms {
     float bounceStartTime;
     float pulseTime;
     bool isPulsing;
+    float audioReactivity;
 };
 
 struct VertexOut {
@@ -45,7 +46,8 @@ void particleCompute(device Particle *particles [[buffer(0)]],
     float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
     
     float baseRadius = uniforms.sphereSize;
-    float breathing = 1.0 + 0.1 * sin(time * 0.5); // Use Metal's built-in sin
+    float audioScale = 1.0 + uniforms.audioReactivity * 0.5; // Scale based on audio
+    float breathing = (1.0 + 0.1 * sin(time * 0.5)) * audioScale;
     float radius = baseRadius * breathing;
     
     // Optimize position calculations

@@ -17,9 +17,22 @@
 		1E5271CE2D3827B00077449E /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		1E8128C22D4AE32E0048CBDD /* Exceptions for "Dot Grid Shaders" folder in "Dot Grid Shaders" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				App/Info.plist,
+			);
+			target = 1E5271AE2D3824D90077449E /* Dot Grid Shaders */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1E5271B12D3824D90077449E /* Dot Grid Shaders */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				1E8128C22D4AE32E0048CBDD /* Exceptions for "Dot Grid Shaders" folder in "Dot Grid Shaders" target */,
+			);
 			path = "Dot Grid Shaders";
 			sourceTree = "<group>";
 		};
@@ -269,17 +282,25 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = ZF7HFBGPL6;
+				DONT_GENERATE_INFOPLIST_FILE = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_EXPAND_BUILD_SETTINGS = NO;
+				INFOPLIST_FILE = "$(PROJECT_DIR)/Dot Grid Shaders/App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Dot Grid Shaders";
 				INFOPLIST_KEY_MetalCaptureEnabled = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_PREPROCESS = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -287,8 +308,9 @@
 				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_INDEX_STORE = YES;
 				"OTHER_SWIFT_FLAGS[arch=*]" = "-enable-bare-slash-regex";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ggray225-gmail.Dot-Grid-Shaders";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ggray225.DotGridShaders;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRINGS_FILE_INFOPLIST_RENAME = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = METAL;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -302,17 +324,25 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = ZF7HFBGPL6;
+				DONT_GENERATE_INFOPLIST_FILE = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_EXPAND_BUILD_SETTINGS = NO;
+				INFOPLIST_FILE = "$(PROJECT_DIR)/Dot Grid Shaders/App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Dot Grid Shaders";
 				INFOPLIST_KEY_MetalCaptureEnabled = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_PREPROCESS = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -320,8 +350,9 @@
 				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_INDEX_STORE = YES;
 				"OTHER_SWIFT_FLAGS[arch=*]" = "-enable-bare-slash-regex";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ggray225-gmail.Dot-Grid-Shaders";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ggray225.DotGridShaders;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRINGS_FILE_INFOPLIST_RENAME = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = METAL;
 				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = METAL;
 				SWIFT_EMIT_LOC_STRINGS = YES;

@@ -1,3 +1,4 @@
+import Combine
 import MetalKit
 import SwiftUI
 
@@ -26,6 +27,7 @@ struct ParticleUniforms {
     var bounceStartTime: Float = 0
     var pulseTime: Float = 0
     var isPulsing: Bool = false
+    var audioReactivity: Float = 0.0
 
     // Add padding to match Metal's alignment
     private var _padding: (UInt8, UInt8, UInt8) = (0, 0, 0)
@@ -53,6 +55,8 @@ struct ParticleShaderView: UIViewRepresentable {
     var particleSize: Double
     var particleCount: Int
     var sphereSize: Double
+    @Binding var isAudioEnabled: Bool
+    @EnvironmentObject var audioProcessor: AudioProcessor
 
     // MARK: UIViewRepresentable
 
@@ -86,10 +90,20 @@ struct ParticleShaderView: UIViewRepresentable {
             coordinator.updateParticleCount(newCount: particleCount)
         }
 
+        // Update uniforms (except audio which is handled by observation)
         let uniformsPtr = coordinator.uniforms.contents().bindMemory(to: ParticleUniforms.self, capacity: 1)
         uniformsPtr.pointee.particleSpeed = Float(particleSpeed)
         uniformsPtr.pointee.particleSize = Float(particleSize)
         uniformsPtr.pointee.sphereSize = Float(sphereSize)
+    }
+
+    // Add audio control methods
+    func startAudioReactivity() {
+        audioProcessor.startMonitoring()
+    }
+
+    func stopAudioReactivity() {
+        audioProcessor.stopMonitoring()
     }
 }
 
@@ -112,29 +126,46 @@ extension ParticleShaderView {
         private var lastFrameTime: CFTimeInterval = 0
         private let targetFrameRate: Double = 60.0
         private let frameInterval: CFTimeInterval = 1.0 / 60.0
+        var disposeBag = Set<AnyCancellable>() // Add for observation
 
         // MARK: Initialization
 
         init(_ parent: ParticleShaderView) {
             self.parent = parent
             particleCount = parent.particleCount
-            guard let device = MTLCreateSystemDefaultDevice(),
-                  let commandQueue = device.makeCommandQueue()
-            else {
-                fatalError("Metal setup failed")
+
+            // Initialize Metal with proper error handling
+            guard let device = MTLCreateSystemDefaultDevice() else {
+                fatalError("Metal is not supported on this device")
+            }
+
+            guard let commandQueue = device.makeCommandQueue() else {
+                fatalError("Failed to create command queue")
             }
 
             self.device = device
             self.commandQueue = commandQueue
 
-            // Create compute pipeline
-            let library = device.makeDefaultLibrary()!
-            let computeFunction = library.makeFunction(name: "particleCompute")!
-            pipeline = try! device.makeComputePipelineState(function: computeFunction)
+            // Create compute pipeline with error handling
+            guard let library = device.makeDefaultLibrary(),
+                  let computeFunction = library.makeFunction(name: "particleCompute")
+            else {
+                fatalError("Failed to create compute function")
+            }
 
-            // Create render pipeline
-            let renderFunction = library.makeFunction(name: "particleFragment")!
-            let vertexFunction = library.makeFunction(name: "particleVertex")!
+            do {
+                pipeline = try device.makeComputePipelineState(function: computeFunction)
+            } catch {
+                fatalError("Failed to create compute pipeline: \(error)")
+            }
+
+            // Create render pipeline with error handling
+            guard let renderFunction = library.makeFunction(name: "particleFragment"),
+                  let vertexFunction = library.makeFunction(name: "particleVertex")
+            else {
+                fatalError("Failed to create render functions")
+            }
+
             let pipelineDescriptor = MTLRenderPipelineDescriptor()
             pipelineDescriptor.vertexFunction = vertexFunction
             pipelineDescriptor.fragmentFunction = renderFunction
@@ -148,21 +179,51 @@ extension ParticleShaderView {
             do {
                 renderPipeline = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
             } catch {
-                fatalError("Failed to create render pipeline state: \(error)")
+                fatalError("Failed to create render pipeline: \(error)")
             }
 
-            // Initialize particles
+            // Initialize buffers with proper alignment and size
             let particleSize = MemoryLayout<Particle>.stride
-            particles = device.makeBuffer(length: particleSize * particleCount, options: [])!
-            uniforms = device.makeBuffer(length: MemoryLayout<ParticleUniforms>.stride, options: [])!
+            let alignedParticleSize = (particleSize + 0xFF) & -0x100 // 256-byte alignment
 
-            // Create particle count buffer
-            particleCountBuffer = device.makeBuffer(length: MemoryLayout<UInt32>.stride, options: [])!
+            guard let particleBuffer = device.makeBuffer(length: alignedParticleSize * particleCount,
+                                                         options: .storageModeShared)
+            else {
+                fatalError("Failed to create particle buffer")
+            }
+            particles = particleBuffer
+
+            let uniformSize = MemoryLayout<ParticleUniforms>.stride
+            let alignedUniformSize = (uniformSize + 0xFF) & -0x100 // 256-byte alignment
+
+            guard let uniformBuffer = device.makeBuffer(length: alignedUniformSize,
+                                                        options: .storageModeShared)
+            else {
+                fatalError("Failed to create uniform buffer")
+            }
+            uniforms = uniformBuffer
+
+            guard let countBuffer = device.makeBuffer(length: MemoryLayout<UInt32>.stride,
+                                                      options: .storageModeShared)
+            else {
+                fatalError("Failed to create count buffer")
+            }
+            particleCountBuffer = countBuffer
+
+            // Initialize count buffer
             let countPtr = particleCountBuffer.contents().bindMemory(to: UInt32.self, capacity: 1)
             countPtr.pointee = UInt32(particleCount)
 
             super.init()
             initializeParticles()
+
+            // Observe audio processor changes
+            parent.audioProcessor.$currentDecibels
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    self?.updateAudioReactivity()
+                }
+                .store(in: &disposeBag)
         }
 
         // MARK: MTKViewDelegate
@@ -199,70 +260,61 @@ extension ParticleShaderView {
         }
 
         func draw(in view: MTKView) {
-            let currentTime = CACurrentMediaTime()
-            let elapsed = currentTime - lastFrameTime
-
-            // Use more precise frame timing
-            let targetFrameDuration = 1.0 / 120.0 // Target 120 FPS
-            if elapsed < targetFrameDuration {
-                return
-            }
-
-            guard parent.isPlaying,
-                  let commandBuffer = commandQueue.makeCommandBuffer(),
-                  let drawable = view.currentDrawable else { return }
-
-            // Use autoreleasepool to reduce memory pressure
             autoreleasepool {
+                guard parent.isPlaying,
+                      let commandBuffer = commandQueue.makeCommandBuffer(),
+                      let drawable = view.currentDrawable else { return }
+
+                let currentTime = CACurrentMediaTime()
+                let elapsed = currentTime - lastFrameTime
+
+                if elapsed < frameInterval {
+                    return
+                }
+
+                // Update uniforms safely
                 let uniformsPtr = uniforms.contents().bindMemory(to: ParticleUniforms.self, capacity: 1)
                 uniformsPtr.pointee.time += Float(elapsed)
-                uniformsPtr.pointee.resolution = SIMD2<Float>(Float(view.drawableSize.width), Float(view.drawableSize.height))
-                uniformsPtr.pointee.particleSpeed = Float(parent.particleSpeed)
-                uniformsPtr.pointee.particleSize = Float(parent.particleSize)
-                uniformsPtr.pointee.sphereSize = Float(parent.sphereSize)
+                uniformsPtr.pointee.resolution = SIMD2<Float>(Float(view.drawableSize.width),
+                                                              Float(view.drawableSize.height))
 
-                // Optimize thread grouping
-                let threadsPerThreadgroup = MTLSize(width: 128, height: 1, depth: 1) // Increased for better GPU utilization
-                let threadgroups = MTLSize(
-                    width: (particleCount + threadsPerThreadgroup.width - 1) / threadsPerThreadgroup.width,
-                    height: 1,
-                    depth: 1
-                )
-
+                // Compute pass
                 if let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
                     computeEncoder.setComputePipelineState(pipeline)
                     computeEncoder.setBuffer(particles, offset: 0, index: 0)
                     computeEncoder.setBuffer(uniforms, offset: 0, index: 1)
                     computeEncoder.setBuffer(particleCountBuffer, offset: 0, index: 2)
 
-                    if threadgroups.width > 0 {
-                        computeEncoder.dispatchThreadgroups(threadgroups, threadsPerThreadgroup: threadsPerThreadgroup)
-                    }
+                    let threadsPerThreadgroup = MTLSize(width: min(pipeline.maxTotalThreadsPerThreadgroup, 128),
+                                                        height: 1,
+                                                        depth: 1)
+                    let threadgroups = MTLSize(
+                        width: (particleCount + threadsPerThreadgroup.width - 1) / threadsPerThreadgroup.width,
+                        height: 1,
+                        depth: 1
+                    )
+
+                    computeEncoder.dispatchThreadgroups(threadgroups, threadsPerThreadgroup: threadsPerThreadgroup)
                     computeEncoder.endEncoding()
                 }
 
                 // Render pass
-                if let renderPassDescriptor = view.currentRenderPassDescriptor {
-                    renderPassDescriptor.colorAttachments[0].loadAction = .clear
-                    renderPassDescriptor.colorAttachments[0].storeAction = .store
-                    renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
-
-                    if let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
-                        renderEncoder.setRenderPipelineState(renderPipeline)
-                        renderEncoder.setFragmentBuffer(uniforms, offset: 0, index: 0)
-                        renderEncoder.setFragmentBuffer(particles, offset: 0, index: 1)
-                        renderEncoder.setFragmentBuffer(particleCountBuffer, offset: 0, index: 2)
-                        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-                        renderEncoder.endEncoding()
-                    }
+                if let descriptor = view.currentRenderPassDescriptor,
+                   let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor)
+                {
+                    renderEncoder.setRenderPipelineState(renderPipeline)
+                    renderEncoder.setFragmentBuffer(uniforms, offset: 0, index: 0)
+                    renderEncoder.setFragmentBuffer(particles, offset: 0, index: 1)
+                    renderEncoder.setFragmentBuffer(particleCountBuffer, offset: 0, index: 2)
+                    renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+                    renderEncoder.endEncoding()
                 }
+
+                commandBuffer.present(drawable)
+                commandBuffer.commit()
+
+                lastFrameTime = currentTime
             }
-
-            // Optimize command buffer scheduling
-            commandBuffer.present(drawable)
-            commandBuffer.commit()
-
-            lastFrameTime = currentTime
         }
 
         // MARK: Gesture Handling
@@ -323,7 +375,14 @@ extension ParticleShaderView {
         func updateParticleCount(newCount: Int) {
             // Recreate particle buffer with new size
             let particleSize = MemoryLayout<Particle>.stride
-            particles = device.makeBuffer(length: particleSize * newCount, options: [])!
+            let alignedParticleSize = (particleSize + 0xFF) & -0x100 // 256-byte alignment
+
+            guard let particleBuffer = device.makeBuffer(length: alignedParticleSize * newCount,
+                                                         options: .storageModeShared)
+            else {
+                fatalError("Failed to create particle buffer")
+            }
+            particles = particleBuffer
 
             // Update particle count buffer
             let countPtr = particleCountBuffer.contents().bindMemory(to: UInt32.self, capacity: 1)
@@ -331,6 +390,11 @@ extension ParticleShaderView {
 
             // Reinitialize particles with new count
             initializeParticles()
+        }
+
+        private func updateAudioReactivity() {
+            let uniformsPtr = uniforms.contents().bindMemory(to: ParticleUniforms.self, capacity: 1)
+            uniformsPtr.pointee.audioReactivity = max(0, min(1, parent.audioProcessor.currentDecibels))
         }
     }
 }
@@ -343,7 +407,8 @@ extension ParticleShaderView {
         particleSpeed: 1.0,
         particleSize: 0.005,
         particleCount: 1000,
-        sphereSize: 400.0
+        sphereSize: 400.0,
+        isAudioEnabled: .constant(true)
     )
     .frame(width: 400, height: 400)
     .preferredColorScheme(.dark)
