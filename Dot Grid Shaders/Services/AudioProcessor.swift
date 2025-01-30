@@ -71,22 +71,24 @@ class AudioProcessor: ObservableObject {
                   !self.isShuttingDown else { return }
 
             self.queue.async {
+                // Add debug print
+                print("Processing audio buffer: \(buffer.frameLength) frames")
+
                 guard let channelData = buffer.floatChannelData?[0] else { return }
                 let samples = Array(UnsafeBufferPointer(start: channelData,
                                                         count: Int(buffer.frameLength)))
 
-                // Calculate RMS
                 let rms = sqrt(samples.map { $0 * $0 }.reduce(0, +) / Float(buffer.frameLength))
-
-                // Convert to decibels with safety checks
                 var db: Float = -160
                 if rms > 0 {
                     db = 20 * log10(rms)
                 }
 
-                // Normalize and clamp
                 db = max(min(db, 0), -60)
                 let normalizedDb = (db + 60) / 60
+
+                // Add debug print
+                print("Current dB: \(db), Normalized: \(normalizedDb)")
 
                 DispatchQueue.main.async {
                     if !self.isShuttingDown {

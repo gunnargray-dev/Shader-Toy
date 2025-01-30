@@ -46,14 +46,20 @@ void particleCompute(device Particle *particles [[buffer(0)]],
     float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
     
     float baseRadius = uniforms.sphereSize;
-    float audioScale = 1.0 + uniforms.audioReactivity * 0.5; // Scale based on audio
-    float breathing = (1.0 + 0.1 * sin(time * 0.5)) * audioScale;
-    float radius = baseRadius * breathing;
-    
-    // Optimize position calculations
+
+    // Make pulse rate respond to audio level
+    float pulseRate = 0.5 + uniforms.audioReactivity * 8.0; // Higher audio = faster pulse
+    float pulseAmplitude = 0.2 + uniforms.audioReactivity * 0.6; // Higher audio = bigger pulse
+
+    // Apply audio reactivity to the spherical coordinates
+    float audioScale = 1.0 + uniforms.audioReactivity * 2.0;
+    float deformation = sin(phi * 4.0 + time * pulseRate) * pulseAmplitude; // Create wave pattern around sphere
+    float radius = baseRadius * (1.0 + deformation) * audioScale;
+
+    // This will make the surface ripple and deform based on audio
     float2 spherePos;
-    spherePos.x = cos(phi) * sinTheta * radius;  // Use Metal's built-in cos
-    spherePos.y = sin(phi) * sinTheta * radius;  // Use Metal's built-in sin
+    spherePos.x = cos(phi) * sinTheta * radius;
+    spherePos.y = sin(phi) * sinTheta * radius;
     float z = cosTheta * radius;
     
     // Optimize perspective calculation

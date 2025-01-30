@@ -59,6 +59,12 @@ struct ContentView: View {
                             audioProcessor.stopMonitoring()
                         }
                     }
+
+                // Audio level
+                Text("Audio Level: \(String(format: "%.2f", audioProcessor.currentDecibels))")
+                    .foregroundColor(.white)
+                Text("Audio Scale: \(String(format: "%.2f", 1.0 + audioProcessor.currentDecibels * 4.0))")
+                    .foregroundColor(.white)
             }
         }
         .sheet(isPresented: $isShowingSheet) {
